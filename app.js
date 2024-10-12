@@ -7,7 +7,6 @@ var logger = require('morgan');
 const GlobalErrorHandler = require('./controllers/ErrorController');
 
 var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
 
 var app = express();
 
@@ -22,6 +21,20 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', indexRouter);
+
+if (process.env.NODE_ENV === 'production') {
+  const __dirname = path.resolve();
+  app.use(express.static(path.join(__dirname, '/client/build')));
+
+  app.get('*', (req, res) =>
+    res.sendFile(path.resolve(__dirname, 'client', 'build', 'index.html'))
+  );
+} else {
+  const __dirname = path.resolve();
+  app.get('/', (req, res) => {
+    res.send('API is running....');
+  });
+}
 
 app.use(GlobalErrorHandler);
 
