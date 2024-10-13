@@ -29,19 +29,20 @@ exports.getHistoricalData = expressAsyncHandler(async (req, res, next) => {
 
     const profileData = await smartApi.getProfile();
 
-    // Historical Methods
+    const { exchange, symboltoken, interval, fromdate, todate } = req.body;
+
     const histoData = await smartApi.getCandleData({
-      exchange: 'NFO', // NSE Futures and Options
-      symboltoken: '43414', // Token for Nifty50 Futures
-      interval: 'ONE_MINUTE', // Use suitable interval (ONE_MINUTE, FIVE_MINUTE, etc.)
-      fromdate: '2024-10-01 09:15', // Start date and time for fetching data
-      todate: '2024-10-10 15:30', // End date and time for fetching data
+      exchange: exchange,
+      symboltoken: symboltoken,
+      interval: interval,
+      fromdate: fromdate,
+      todate: todate,
     });
 
     res.status(200).json({
       status: 'success',
-      sessionData,
-      profileData,
+      // sessionData,
+      // profileData,
       histoData,
     });
   } catch (error) {
@@ -54,23 +55,32 @@ exports.getSymbolData = expressAsyncHandler(async (req, res, next) => {
     // Path to the JSON file (you can download it and place it locally)
     const filePath = './OpenAPIScripMaster.json';
 
+    // Extract the search criteria from the request body
+    const { symbol, name, expiry, strike } = req.body;
+
     // Read and parse the JSON file
     fs.readFile(filePath, 'utf8', (err, data) => {
       if (err) {
         console.error('Error reading the file:', err);
-        return;
+        return next(new AppError('Error reading the file', 500));
       }
+
       // Parse the JSON data
       const scripMaster = JSON.parse(data);
 
-      // Filter to find the specific Nifty50 Futures or Options
-      const niftyInstruments = scripMaster.filter((item) =>
-        item.symbol.includes('BANKNIFTY')
+      // Filter the data based on the provided search criteria
+      const filteredInstruments = scripMaster.filter(
+        (item) =>
+          (!symbol || item.symbol === symbol) &&
+          (!name || item.name === name) &&
+          (!expiry || item.expiry === expiry) &&
+          (!strike || item.strike === strike) // Ensure strike price is compared as a string
       );
 
+      // Return the filtered instruments
       res.status(200).json({
         status: 'success',
-        niftyInstruments,
+        filteredInstruments,
       });
     });
   } catch (error) {
