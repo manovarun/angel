@@ -1,7 +1,7 @@
 var express = require('express');
-const { getBankNiftyOptionsData } = require('../controllers/OptionsController');
+const { generateSmartApiSession } = require('../controllers/OptionsController');
 var router = express.Router();
 
-router.route('/').get(getBankNiftyOptionsData);
+router.route('/').get(generateSmartApiSession);
 
 module.exports = router;
