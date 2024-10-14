@@ -100,9 +100,42 @@ exports.backtestStrategy = expressAsyncHandler(async (req, res, next) => {
   try {
     const { feedToken, smartApi } = await generateSessionAndFeedToken();
 
-    // Fetch Candle Data for CE and PE Options
-    const { entryTime, exitTime, expiry, strike } = req.body;
-    const { ceToken, peToken } = await fetchOptionTokens(expiry, strike);
+    // Fetch Candle Data for Nifty 50 to get the underlying spot value
+    const { entryTime, exitTime, expiry } = req.body;
+
+    // Fetch Nifty 50 spot price at the entry time
+    const niftySpotData = await smartApi.getCandleData({
+      exchange: 'NSE',
+      symboltoken: '99926000', // Token for Nifty 50 index
+      interval: 'ONE_MINUTE',
+      fromdate: entryTime,
+      todate: entryTime,
+      feedtoken: feedToken,
+    });
+
+    if (!niftySpotData.status || !niftySpotData.data.length) {
+      return next(new AppError('Error fetching Nifty 50 data', 400));
+    }
+
+    console.log('niftySpotData', niftySpotData);
+
+    // Get the closing price of Nifty 50 at entry time (use the close value from the first candle)
+    const niftySpotPrice = niftySpotData.data[0][4];
+
+    // Dynamically calculate the nearest strike price (rounded to the nearest 50 or 100 points)
+    const nearestStrikePrice = Math.round(niftySpotPrice / 50) * 50;
+
+    console.log(
+      `Nifty Spot Price: ${niftySpotPrice}, Nearest Strike: ${nearestStrikePrice}`
+    );
+
+    const formattedStrikePrice = (nearestStrikePrice * 100).toFixed(6);
+
+    // Fetch option tokens based on dynamically calculated strike price
+    const { ceToken, peToken } = await fetchOptionTokens(
+      expiry,
+      formattedStrikePrice
+    );
 
     console.log('CE Token:', ceToken);
     console.log('PE Token:', peToken);
@@ -110,38 +143,45 @@ exports.backtestStrategy = expressAsyncHandler(async (req, res, next) => {
     // Default to 25 as the Nifty 50 lot size
     const lotSize = 25;
 
-    // Entry prices (you can also calculate this dynamically)
-    let entryPriceCE = 189.75;
-    let entryPricePE = 150.55;
+    // Fetch data for CE and PE tokens using dynamically fetched tokens
+    const ceData = await smartApi.getCandleData({
+      exchange: 'NFO',
+      symboltoken: ceToken,
+      interval: 'ONE_MINUTE',
+      fromdate: entryTime,
+      todate: exitTime,
+      feedtoken: feedToken,
+    });
 
-    // Calculate Stop Loss for CE and PE (25% stop loss)
+    const peData = await smartApi.getCandleData({
+      exchange: 'NFO',
+      symboltoken: peToken,
+      interval: 'ONE_MINUTE',
+      fromdate: entryTime,
+      todate: exitTime,
+      feedtoken: feedToken,
+    });
+
+    // Ensure you handle cases where data is not available
+    if (
+      ceData.status !== true ||
+      peData.status !== true ||
+      !ceData.data.length ||
+      !peData.data.length
+    ) {
+      return next(new AppError('Invalid data received for CE or PE', 400));
+    }
+
+    // Get Entry Prices (Price at entryTime)
+    let entryPriceCE = ceData.data[0][4]; // Closing price at entryTime
+    let entryPricePE = peData.data[0][4]; // Closing price at entryTime
+
+    // Set Stop Loss for CE and PE (25% stop loss)
     let stopLossCE = entryPriceCE + entryPriceCE * 0.25;
     let stopLossPE = entryPricePE + entryPricePE * 0.25;
 
     let exitPriceCE = null;
     let exitPricePE = null;
-
-    // Fetch data for CE and PE tokens using dynamically fetched tokens
-    const ceData = await smartApi.getCandleData({
-      exchange: 'NFO',
-      symboltoken: ceToken, // Token fetched dynamically
-      interval: 'ONE_MINUTE',
-      fromdate: entryTime,
-      todate: exitTime,
-    });
-
-    const peData = await smartApi.getCandleData({
-      exchange: 'NFO',
-      symboltoken: peToken, // Token fetched dynamically
-      interval: 'ONE_MINUTE',
-      fromdate: entryTime,
-      todate: exitTime,
-    });
-
-    // Ensure you handle cases where data is not available
-    if (ceData.status !== true || peData.status !== true) {
-      return next(new AppError('Invalid data received for CE or PE', 400));
-    }
 
     // Simulate the price movements and check stop loss for CE and PE
     ceData.data.forEach((candle) => {
@@ -164,6 +204,14 @@ exports.backtestStrategy = expressAsyncHandler(async (req, res, next) => {
       }
     });
 
+    // If stop loss wasn't hit, set the exit prices to the close price at exit time
+    if (!exitPriceCE) {
+      exitPriceCE = ceData.data[ceData.data.length - 1][4]; // Closing price at exitTime
+    }
+    if (!exitPricePE) {
+      exitPricePE = peData.data[peData.data.length - 1][4]; // Closing price at exitTime
+    }
+
     // Calculate P&L
     const profitOrLossCE = (entryPriceCE - exitPriceCE) * lotSize; // For Sell position
     const profitOrLossPE = (entryPricePE - exitPricePE) * lotSize; // For Sell position
@@ -178,10 +226,16 @@ exports.backtestStrategy = expressAsyncHandler(async (req, res, next) => {
         PnL_PE: profitOrLossPE,
         totalPnL: totalProfitOrLoss,
       },
+      entryPrices: {
+        CE: entryPriceCE,
+        PE: entryPricePE,
+      },
       exitPrices: {
         CE: exitPriceCE,
         PE: exitPricePE,
       },
+      niftySpotPrice,
+      nearestStrikePrice,
     });
   } catch (error) {
     console.error('Error during backtest:', error);
