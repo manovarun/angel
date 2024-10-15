@@ -118,8 +118,6 @@ exports.shortStraddleSeSd = expressAsyncHandler(async (req, res, next) => {
       return next(new AppError('Error fetching Nifty 50 data', 400));
     }
 
-    console.log('niftySpotData', niftySpotData);
-
     // Get the closing price of Nifty 50 at entry time (use the close value from the first candle)
     const niftySpotPrice = niftySpotData.data[0][4];
 

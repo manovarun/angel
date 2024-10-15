@@ -3,7 +3,7 @@ const {
   getHistoricalData,
   getSymbolData,
   shortStraddleSeSd,
-  getHistoricalDataForExpiredContract,
+  shortStraddleMeMd,
 } = require('../controllers/backtestController');
 var router = express.Router();
 
@@ -14,6 +14,6 @@ router.route('/symbol').get(getSymbolData);
 router.route('/shortstraddlesesd').get(shortStraddleSeSd);
 
 //Short Straddle Multiple Expiry Multiple Day
-router.route('/histoptions').get(getHistoricalDataForExpiredContract);
+router.route('/shortstraddlememd').get(shortStraddleMeMd);
 
 module.exports = router;
