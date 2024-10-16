@@ -5,7 +5,10 @@ const {
   shortStraddleSeSd,
   shortStraddleMeMd,
 } = require('../controllers/backtestController');
-const { HistoSwing } = require('../controllers/Swingcontroller');
+const {
+  HistoSwing,
+  saveHistoSwing,
+} = require('../controllers/Swingcontroller');
 var router = express.Router();
 
 router.route('/').get(getHistoricalData);
@@ -19,5 +22,7 @@ router.route('/shortstraddlememd').get(shortStraddleMeMd);
 
 //Backtest Nifty50 stock for swing trade
 router.route('/swingtrade').get(HistoSwing);
+
+router.route('/saveswing').post(saveHistoSwing);
 
 module.exports = router;
